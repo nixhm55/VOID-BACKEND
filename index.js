@@ -37,23 +37,14 @@ app.get('/stream', async (req, res) => {
   }
 
   try {
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
+    const info = await ytdl.getInfo(videoUrl);
+    const audioFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
     
-    const stream = ytdl(videoUrl, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
-      highWaterMark: 1 << 25,
-    });
+    if (!audioFormat || !audioFormat.url) {
+      return res.status(404).send('Audio stream not found');
+    }
 
-    stream.on('error', (err) => {
-      console.error("YTDL stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).send('Stream failed');
-      }
-    });
-
-    stream.pipe(res);
+    res.redirect(audioFormat.url);
   } catch (error) {
     console.error("Stream error:", error);
     if (!res.headersSent) {
