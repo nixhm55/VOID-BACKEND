@@ -1,17 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const yts = require('yt-search');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// UptimeRobot-ന് വേണ്ടിയുള്ള റൂട്ട് (സെർവർ ഉറങ്ങാതിരിക്കാൻ)
 app.get('/', (req, res) => {
   res.status(200).send('VOID Backend is awake and running!');
 });
 
-// YouTube Music Search Route
 app.get('/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
@@ -21,7 +20,7 @@ app.get('/search', async (req, res) => {
     const videos = r.videos.slice(0, 15).map(v => ({
       id: v.videoId,
       name: v.title,
-      album: "YouTube Music",
+      album: "YouTube",
       artist: v.author.name,
       image: v.thumbnail,
       downloadUrl: `${req.protocol}://${req.get('host')}/stream?url=${encodeURIComponent(v.url)}`,
@@ -34,42 +33,38 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// Ultra-fast Audio Stream Converter using Cobalt API
 app.get('/stream', async (req, res) => {
   const videoUrl = req.query.url;
-  if (!videoUrl) {
+  if (!videoUrl || !ytdl.validateURL(videoUrl)) {
     return res.status(400).send('Invalid URL');
   }
 
   try {
-    const response = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: videoUrl,
-        aFormat: 'mp3',
-        isAudioOnly: true
-      })
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    const stream = ytdl(videoUrl, {
+      quality: 'highestaudio',
+      filter: 'audioonly',
+      highWaterMark: 1 << 25,
     });
 
-    const data = await response.json();
+    stream.on('error', (err) => {
+      console.error("YTDL stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).send('Stream failed');
+      }
+    });
 
-    if (data && data.url) {
-      // ഡയറക്റ്റ് ഓഡിയോ ലിങ്കിലേക്ക് റീഡയറക്റ്റ് ചെയ്യുന്നു (ലാഗ് ഫ്രീ)
-      res.redirect(data.url);
-    } else {
-      res.status(404).send('Audio stream not found');
-    }
+    stream.pipe(res);
   } catch (error) {
-    console.error("Cobalt Stream error:", error);
-    res.status(500).send('Stream failed');
+    console.error("Stream error:", error);
+    if (!res.headersSent) {
+      res.status(500).send('Stream failed');
+    }
   }
 });
 
-// പോർട്ട് കോൺഫിഗറേഷൻ
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`VOID backend running on port ${PORT}`);
