@@ -38,14 +38,27 @@ app.get('/stream', async (req, res) => {
 
   try {
     res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
     const stream = ytdl(videoUrl, {
       quality: 'highestaudio',
       filter: 'audioonly',
+      highWaterMark: 1 << 25,
     });
+
+    stream.on('error', (err) => {
+      console.error("YTDL stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).send('Stream failed');
+      }
+    });
+
     stream.pipe(res);
   } catch (error) {
     console.error("Stream error:", error);
-    res.status(500).send('Stream failed');
+    if (!res.headersSent) {
+      res.status(500).send('Stream failed');
+    }
   }
 });
 
