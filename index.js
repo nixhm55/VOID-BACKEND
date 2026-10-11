@@ -7,6 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.status(200).send('VOID Backend is awake and running!');
+});
+
 app.get('/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
