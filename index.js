@@ -39,34 +39,42 @@ app.get('/stream', async (req, res) => {
   }
 
   try {
-    const cobaltResponse = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'VOID-Music-Player/1.0'
-      },
-      body: JSON.stringify({
-        url: videoUrl,
-        isAudioOnly: true,
-        aFormat: 'mp3'
-      })
-    });
-
-    if (!cobaltResponse.ok) {
-      throw new Error(`Cobalt API failed with status: ${cobaltResponse.status}`);
+    let videoId = '';
+    try {
+      const parsedUrl = new URL(videoUrl);
+      if (parsedUrl.hostname.includes('youtube.com')) {
+        videoId = parsedUrl.searchParams.get('v');
+      } else if (parsedUrl.hostname.includes('youtu.be')) {
+        videoId = parsedUrl.pathname.slice(1);
+      }
+    } catch (e) {
+      return res.status(400).send('Invalid YouTube URL format');
     }
 
-    const data = await cobaltResponse.json();
+    if (!videoId) {
+      return res.status(400).send('Could not extract Video ID');
+    }
+
+    const pipedResponse = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
     
-    if (data && data.url) {
-      res.redirect(data.url);
-    } else {
-      res.status(500).send('Stream URL extraction failed');
+    if (!pipedResponse.ok) {
+      throw new Error(`Piped API failed with status: ${pipedResponse.status}`);
     }
+
+    const data = await pipedResponse.json();
+    
+    const audioStreams = data.audioStreams || [];
+    if (audioStreams.length === 0) {
+      return res.status(404).send('No audio streams found');
+    }
+
+    const bestStream = audioStreams.find(s => s.mimeType.includes('mp4') || s.mimeType.includes('m4a')) || audioStreams[0];
+
+    res.redirect(bestStream.url);
+
   } catch (error) {
     console.error("Stream proxy error:", error);
-    res.status(500).send('Stream failed');
+    res.status(500).send('Stream extraction failed');
   }
 });
 
