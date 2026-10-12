@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const yts = require('yt-search');
-const ytdl = require('@distube/ytdl-core');
+const play = require('play-dl');
 
 const app = express();
 app.use(cors());
@@ -35,7 +35,7 @@ app.get('/search', async (req, res) => {
 
 app.get('/stream', async (req, res) => {
   const videoUrl = req.query.url;
-  if (!videoUrl || !ytdl.validateURL(videoUrl)) {
+  if (!videoUrl) {
     return res.status(400).send('Invalid URL');
   }
 
@@ -43,20 +43,11 @@ app.get('/stream', async (req, res) => {
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Transfer-Encoding', 'chunked');
     
-    const stream = ytdl(videoUrl, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
-      highWaterMark: 1 << 25,
-    });
-
-    stream.on('error', (err) => {
-      console.error("YTDL stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).send('Stream failed');
-      }
-    });
-
-    stream.pipe(res);
+    // Using play-dl to bypass 429 limits
+    const streamInfo = await play.stream(videoUrl);
+    
+    streamInfo.stream.pipe(res);
+    
   } catch (error) {
     console.error("Stream error:", error);
     if (!res.headersSent) {
