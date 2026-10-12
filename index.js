@@ -23,7 +23,7 @@ app.get('/search', async (req, res) => {
       album: "YouTube",
       artist: v.author.name,
       image: v.thumbnail,
-      downloadUrl: `${req.protocol}://${req.get('host')}/stream?url=${encodeURIComponent(v.url)}`,
+      downloadUrl: `https://void-backend-n0jb.onrender.com/stream?url=${encodeURIComponent(v.url)}`,
       duration: v.seconds,
     }));
     res.json(videos);
