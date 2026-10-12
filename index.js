@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const yts = require('yt-search');
-const play = require('play-dl');
+const youtubedl = require('youtube-dl-exec');
 
 const app = express();
 app.use(cors());
@@ -42,12 +42,21 @@ app.get('/stream', async (req, res) => {
   try {
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Transfer-Encoding', 'chunked');
-    
-    // Using play-dl to bypass 429 limits
-    const streamInfo = await play.stream(videoUrl);
-    
-    streamInfo.stream.pipe(res);
-    
+
+    const subprocess = youtubedl.exec(videoUrl, {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      output: '-',
+    }, { stdio: ['ignore', 'pipe', 'ignore'] });
+
+    subprocess.stdout.pipe(res);
+
+    subprocess.on('error', (err) => {
+      console.error("Subprocess error:", err);
+      if (!res.headersSent) {
+        res.status(500).send('Stream failed');
+      }
+    });
   } catch (error) {
     console.error("Stream error:", error);
     if (!res.headersSent) {
