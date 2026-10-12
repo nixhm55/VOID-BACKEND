@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const yts = require('yt-search');
-const youtubedl = require('youtube-dl-exec');
 
 const app = express();
 app.use(cors());
@@ -40,28 +39,34 @@ app.get('/stream', async (req, res) => {
   }
 
   try {
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
-
-    const subprocess = youtubedl.exec(videoUrl, {
-      extractAudio: true,
-      audioFormat: 'mp3',
-      output: '-',
-    }, { stdio: ['ignore', 'pipe', 'ignore'] });
-
-    subprocess.stdout.pipe(res);
-
-    subprocess.on('error', (err) => {
-      console.error("Subprocess error:", err);
-      if (!res.headersSent) {
-        res.status(500).send('Stream failed');
-      }
+    const cobaltResponse = await fetch('https://api.cobalt.tools/api/json', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'VOID-Music-Player/1.0'
+      },
+      body: JSON.stringify({
+        url: videoUrl,
+        isAudioOnly: true,
+        aFormat: 'mp3'
+      })
     });
-  } catch (error) {
-    console.error("Stream error:", error);
-    if (!res.headersSent) {
-      res.status(500).send('Stream failed');
+
+    if (!cobaltResponse.ok) {
+      throw new Error(`Cobalt API failed with status: ${cobaltResponse.status}`);
     }
+
+    const data = await cobaltResponse.json();
+    
+    if (data && data.url) {
+      res.redirect(data.url);
+    } else {
+      res.status(500).send('Stream URL extraction failed');
+    }
+  } catch (error) {
+    console.error("Stream proxy error:", error);
+    res.status(500).send('Stream failed');
   }
 });
 
