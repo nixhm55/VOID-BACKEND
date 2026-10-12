@@ -32,6 +32,13 @@ app.get('/search', async (req, res) => {
   }
 });
 
+const PIPED_INSTANCES = [
+  'https://pipedapi.tokhmi.xyz',
+  'https://api.piped.projectsegfau.lt',
+  'https://pipedapi.kavin.rocks',
+  'https://piped-api.garudalinux.org'
+];
+
 app.get('/stream', async (req, res) => {
   const videoUrl = req.query.url;
   if (!videoUrl) {
@@ -55,22 +62,30 @@ app.get('/stream', async (req, res) => {
       return res.status(400).send('Could not extract Video ID');
     }
 
-    const pipedResponse = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
-    
-    if (!pipedResponse.ok) {
-      throw new Error(`Piped API failed with status: ${pipedResponse.status}`);
+    let streamUrl = null;
+
+    for (const instance of PIPED_INSTANCES) {
+      try {
+        const pipedResponse = await fetch(`${instance}/streams/${videoId}`);
+        if (pipedResponse.ok) {
+          const data = await pipedResponse.json();
+          const audioStreams = data.audioStreams || [];
+          if (audioStreams.length > 0) {
+            const bestStream = audioStreams.find(s => s.mimeType.includes('mp4') || s.mimeType.includes('m4a')) || audioStreams[0];
+            streamUrl = bestStream.url;
+            break;
+          }
+        }
+      } catch (err) {
+        console.error(`Failed fetching from ${instance}:`, err.message);
+      }
     }
 
-    const data = await pipedResponse.json();
-    
-    const audioStreams = data.audioStreams || [];
-    if (audioStreams.length === 0) {
-      return res.status(404).send('No audio streams found');
+    if (streamUrl) {
+      res.redirect(streamUrl);
+    } else {
+      res.status(502).send('All Piped API instances failed to return a stream');
     }
-
-    const bestStream = audioStreams.find(s => s.mimeType.includes('mp4') || s.mimeType.includes('m4a')) || audioStreams[0];
-
-    res.redirect(bestStream.url);
 
   } catch (error) {
     console.error("Stream proxy error:", error);
